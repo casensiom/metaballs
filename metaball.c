@@ -7,6 +7,11 @@
 #include <string.h>
 #include <errno.h>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 #include <raylib.h>
 
 #define THRESHOLD (0.3)
@@ -19,10 +24,10 @@ typedef struct TYPE ## _struct_array { \
 } TYPE ## Array;
 
 #define MB_DEFINE_FIXED_ARRAY(TYPE, SIZE) \
-typedef struct TYPE ## _struct_array { \
+typedef struct TYPE ## _struct_array_ ## SIZE { \
     TYPE items[SIZE]; \
     size_t count; \
-} TYPE ## Array;
+} TYPE ## Array ## SIZE;
 
 #define MB_CREATE_ARRAY(TYPE, CAPACITY) \
 (TYPE ## Array){ \
@@ -46,7 +51,7 @@ enum MB_COORDINATE {
     MB_COORD_COUNT
 };
 
-typedef struct mb_vector3_struct {
+typedef struct vector3_struct {
     double x;
     double y;
     double z;
@@ -103,7 +108,7 @@ MB_DEFINE_FIXED_ARRAY(Triangle, 5);
 typedef struct voxel_struct {
     VoxelCorner corners[8];
     size_t bits;
-    TriangleArray triangles;
+    TriangleArray5 triangles;
 } Voxel;
 
 typedef struct grid_struct {
@@ -514,12 +519,30 @@ move_balls(Grid grid, BallArray balls, double t) {
 
 double
 get_current_time() {
+#ifdef _WIN32
+    LARGE_INTEGER frequency;
+    if (!QueryPerformanceFrequency(&frequency)) {
+        fprintf(stderr, "ERROR: QueryPerformanceFrequency failed.\n");
+        exit(1);
+    }
+
+    LARGE_INTEGER now;
+    if (!QueryPerformanceCounter(&now)) {
+        fprintf(stderr, "ERROR: QueryPerformanceCounter failed.\n");
+        exit(1);
+    }
+
+    return (double)now.QuadPart / (double)frequency.QuadPart;
+
+#else 
     struct timespec now;
     if (clock_gettime(CLOCK_MONOTONIC, &now) < 0) {
         fprintf(stderr, "ERROR: could not get current monotonic time: %s\n", strerror(errno));
         exit(1);
     }
     return (double) now.tv_sec + now.tv_nsec * 0.000000001f;
+
+#endif
 }
 
 int
