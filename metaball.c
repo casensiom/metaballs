@@ -87,9 +87,14 @@ MB_DEFINE_ARRAY(Index);
 typedef double Energy;
 MB_DEFINE_ARRAY(Energy);
 
+typedef struct cache_struct {
+    bool dirty;
+    Vector3d value;
+} Cache;
+
 typedef struct node_struct {
     double energy;
-    Vector3d interpolation[MB_COORD_COUNT];
+    Cache cache[MB_COORD_COUNT];
 } Node;
 MB_DEFINE_ARRAY(Node);
 
@@ -166,7 +171,9 @@ void
 set_energy_point(Index3d grid_pos, Grid grid, double energy) {
     size_t grid_index = compute_grid_point_index(grid_pos, grid);
     grid.nodes.items[grid_index].energy = energy;
-    // printf("grid[%lu][%lu][%lu] = %0.2f\n", grid_pos.x, grid_pos.y, grid_pos.z, energy);
+    grid.nodes.items[grid_index].cache[MB_COORD_X].dirty = true;
+    grid.nodes.items[grid_index].cache[MB_COORD_Y].dirty = true;
+    grid.nodes.items[grid_index].cache[MB_COORD_Z].dirty = true;
 }
 
 
@@ -293,6 +300,11 @@ compute_voxel(Index3d grid_pos, Grid grid, BallArray balls) {
 //           0           
 // compute edge points to build triangles
 
+    // This table indicates what axis variations have the second index of marching_cube_edges
+    size_t coords[12] = {MB_COORD_X, MB_COORD_Z, MB_COORD_X, MB_COORD_Z, 
+                        MB_COORD_X, MB_COORD_Z, MB_COORD_X, MB_COORD_Z, 
+                        MB_COORD_Y, MB_COORD_Y,  MB_COORD_Y,  MB_COORD_Y};
+
     Vector3d world_pos = compute_grid_point_coordinates(grid_pos, grid);
     
     Vector3d vertices[3];
@@ -304,12 +316,18 @@ compute_voxel(Index3d grid_pos, Grid grid, BallArray balls) {
             break;
         }
 
-        // TODO: Check if the edge was already calculated: make a cache for edge
-        // grid.nodes.items[voxel.corners[index0].grid_index].energy;
 
         char index0 = marching_cube_edges[edge][0];
         char index1 = marching_cube_edges[edge][1];
+        Vector3d computedPoint;
 
+#define USE_CACHE
+#ifdef USE_CACHE
+        size_t coord = coords[edge];
+        if(!grid.nodes.items[voxel.corners[index0].grid_index].cache[coord].dirty) {
+            computedPoint = grid.nodes.items[voxel.corners[index0].grid_index].cache[coord].value;
+        } else {
+#endif
         double t = (THRESHOLD - voxel.corners[index0].energy) / (voxel.corners[index1].energy - voxel.corners[index0].energy);
         
         double field_value[MB_COORD_COUNT];
@@ -319,11 +337,18 @@ compute_voxel(Index3d grid_pos, Grid grid, BallArray balls) {
             field_value[i] = field_intensity_0 + (field_intensity_1 - field_intensity_0) * t;
         }
 
-        vertices[vertex_index] = (Vector3d)   {
+            computedPoint = (Vector3d)   {
                                     world_pos.x + field_value[MB_COORD_X] * grid.size.x,
                                     world_pos.y + field_value[MB_COORD_Y] * grid.size.y,
                                     world_pos.z + field_value[MB_COORD_Z] * grid.size.z
                                 };
+
+#ifdef USE_CACHE
+            grid.nodes.items[voxel.corners[index0].grid_index].cache[coord].value = computedPoint;
+            grid.nodes.items[voxel.corners[index0].grid_index].cache[coord].dirty = false;
+        }
+#endif
+        vertices[vertex_index] = computedPoint;
 
         if(i % 3 == 0) {
 
@@ -432,8 +457,6 @@ render(Grid grid, BallArray balls) {
                             .y = balls.items[i].pos.y, 
                             .z = balls.items[i].pos.z
         };
-        // printf("ball[%lu] = (%0.2f, %0.2f, %0.2f) -> %0.2f\n", i, pos.x, pos.y, pos.z, balls.items[i].mass);
-        DrawCircle3D(pos, balls.items[i].mass, rotationAxis, 0, PINK);
     }
 }
 
