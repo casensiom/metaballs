@@ -7,12 +7,13 @@
 #include <string.h>
 #include <errno.h>
 
+#include <raylib.h>
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <profileapi.h>
 #endif
 
-#include <raylib.h>
 
 #define THRESHOLD (0.3)
 
