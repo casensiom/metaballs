@@ -328,20 +328,20 @@ compute_voxel(Index3d grid_pos, Grid grid, BallArray balls) {
             computedPoint = grid.nodes.items[voxel.corners[index0].grid_index].cache[coord].value;
         } else {
 #endif
-        double t = (THRESHOLD - voxel.corners[index0].energy) / (voxel.corners[index1].energy - voxel.corners[index0].energy);
-        
-        double field_value[MB_COORD_COUNT];
-        for(size_t i = 0; i < MB_COORD_COUNT; ++i) {
-            double field_intensity_0 = marching_cube_vertices[index0][i];
-            double field_intensity_1 = marching_cube_vertices[index1][i];
-            field_value[i] = field_intensity_0 + (field_intensity_1 - field_intensity_0) * t;
-        }
+            double t = (THRESHOLD - voxel.corners[index0].energy) / (voxel.corners[index1].energy - voxel.corners[index0].energy);
+            
+            double field_value[MB_COORD_COUNT];
+            for(size_t i = 0; i < MB_COORD_COUNT; ++i) {
+                double field_intensity_0 = marching_cube_vertices[index0][i];
+                double field_intensity_1 = marching_cube_vertices[index1][i];
+                field_value[i] = field_intensity_0 + (field_intensity_1 - field_intensity_0) * t;
+            }
 
             computedPoint = (Vector3d)   {
-                                    world_pos.x + field_value[MB_COORD_X] * grid.size.x,
-                                    world_pos.y + field_value[MB_COORD_Y] * grid.size.y,
-                                    world_pos.z + field_value[MB_COORD_Z] * grid.size.z
-                                };
+                                        world_pos.x + field_value[MB_COORD_X] * grid.size.x,
+                                        world_pos.y + field_value[MB_COORD_Y] * grid.size.y,
+                                        world_pos.z + field_value[MB_COORD_Z] * grid.size.z
+                                    };
 
 #ifdef USE_CACHE
             grid.nodes.items[voxel.corners[index0].grid_index].cache[coord].value = computedPoint;
@@ -569,6 +569,38 @@ get_current_time() {
 #endif
 }
 
+typedef struct fps_struct {
+    char label[256];
+    size_t count;
+    double start;
+    double end;
+} Fps;
+
+void
+fps_init(Fps *fps) {
+    strcpy(fps->label, "FPS: -");
+    fps->count = 0;
+    fps->start = get_current_time();
+    fps->end = fps->start;
+}
+
+char *
+fps_label(Fps *fps) {
+    double elapsed = fps->end - fps->start;
+    if(elapsed > 1.0) {
+        sprintf(fps->label, "FPS: %lu", fps->count);
+        fps->start = get_current_time();
+        fps->count = 0;
+    }
+    return fps->label;
+}
+
+void
+fps_update(Fps *fps) {
+    fps->end = get_current_time();
+    fps->count++;
+}
+
 int
 main(int argc, char *argv[]) {
 
@@ -594,12 +626,19 @@ main(int argc, char *argv[]) {
     camera.fovy = 45.0f;                                // Camera field-of-view Y
     camera.projection = CAMERA_PERSPECTIVE;             // Camera projection type
 
+    Fps fps;
+    fps_init(&fps);
+
+    double total_elapsed = get_current_time();
+    double screenshot_time = 4.90;
     InitWindow(screenWidth, screenHeight, "Metaballs");
     while (!WindowShouldClose())        // Detect window close button or ESC key
     {
 
+        double elapsed_time = get_current_time() - total_elapsed;
         manage_keys(grid, &camera);
-        move_balls(grid, balls, get_current_time());
+        // move_balls(grid, balls, screenshot_time);
+        move_balls(grid, balls, elapsed_time);
 
         compute_metaball(balls, grid);
 
@@ -609,7 +648,13 @@ main(int argc, char *argv[]) {
             generate_mesh(camera, grid, balls);
             render(grid, balls);
             EndMode3D();
+
+            const char *label = fps_label(&fps);
+            DrawText(label, 10, 10, 20, BLACK);
+
         EndDrawing();
+
+        fps_update(&fps);
     }
     CloseWindow();
 
