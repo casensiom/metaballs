@@ -617,8 +617,6 @@ main(int argc, char *argv[]) {
             DrawText(label_fps, 10, 10, 20, BLACK);
 
         EndDrawing();
-
-        fps_update(&fps);
     }
     CloseWindow();
 
