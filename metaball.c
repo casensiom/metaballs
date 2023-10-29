@@ -569,38 +569,6 @@ get_current_time() {
 #endif
 }
 
-typedef struct fps_struct {
-    char label[256];
-    size_t count;
-    double start;
-    double end;
-} Fps;
-
-void
-fps_init(Fps *fps) {
-    strcpy(fps->label, "FPS: -");
-    fps->count = 0;
-    fps->start = get_current_time();
-    fps->end = fps->start;
-}
-
-char *
-fps_label(Fps *fps) {
-    double elapsed = fps->end - fps->start;
-    if(elapsed > 1.0) {
-        sprintf(fps->label, "FPS: %lu", fps->count);
-        fps->start = get_current_time();
-        fps->count = 0;
-    }
-    return fps->label;
-}
-
-void
-fps_update(Fps *fps) {
-    fps->end = get_current_time();
-    fps->count++;
-}
-
 int
 main(int argc, char *argv[]) {
 
@@ -626,19 +594,14 @@ main(int argc, char *argv[]) {
     camera.fovy = 45.0f;                                // Camera field-of-view Y
     camera.projection = CAMERA_PERSPECTIVE;             // Camera projection type
 
-    Fps fps;
-    fps_init(&fps);
-
-    double total_elapsed = get_current_time();
     double screenshot_time = 4.90;
     InitWindow(screenWidth, screenHeight, "Metaballs");
     while (!WindowShouldClose())        // Detect window close button or ESC key
     {
 
-        double elapsed_time = get_current_time() - total_elapsed;
         manage_keys(grid, &camera);
         // move_balls(grid, balls, screenshot_time);
-        move_balls(grid, balls, elapsed_time);
+        move_balls(grid, balls, GetTime());
 
         compute_metaball(balls, grid);
 
@@ -649,8 +612,9 @@ main(int argc, char *argv[]) {
             render(grid, balls);
             EndMode3D();
 
-            const char *label = fps_label(&fps);
-            DrawText(label, 10, 10, 20, BLACK);
+            char label_fps[256];
+            sprintf(label_fps, "FPS: %d", GetFPS());
+            DrawText(label_fps, 10, 10, 20, BLACK);
 
         EndDrawing();
 
