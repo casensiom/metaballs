@@ -11,6 +11,7 @@ There are optimizations to be done.
 
  - ~~Iteration~~. Added a method to visit only valid neighbors.
  - ~~Compute the edge values only once~~. A rudimentary cache system is included.
+ - ~~Add color~~. Added color per ball.
  - Add texture mapping.
  - Clean code, separate voxel calculation and render code.
  - Control, add mouse and keyboard control.
