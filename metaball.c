@@ -75,6 +75,7 @@ typedef struct vertex3_struct
     Vector3d pos;
     Vector3d normal;
     Vector2d text_coord; /* u, v, textureid */
+    Color color;
 } Vertex3d;
 
 typedef struct index3_struct
@@ -89,6 +90,7 @@ typedef struct ball_struct
 {
     Vector3d pos;
     double mass;
+    Color color;
 } Ball;
 MB_DEFINE_ARRAY(Ball);
 
@@ -147,7 +149,7 @@ typedef struct grid_struct
 
 static size_t cache_hit = 0;
 static size_t cache_miss = 0;
-static size_t computed_voxel = 0;
+static bool update_time = true;
 
 Vector3d
 vector3d_normalize(Vector3d v)
@@ -238,6 +240,7 @@ compute_vertex(Vector3d vertex, Grid grid, BallArray balls)
     // Compute vertex normal
     // n += 2 * mass * vector / distance^4
     Vector3d normal = {0};
+    double total_energy = 0;
     for (size_t i = 0; i < balls.count; i++)
     {
         Vector3d dir = {
@@ -246,11 +249,30 @@ compute_vertex(Vector3d vertex, Grid grid, BallArray balls)
             .z = v.pos.z - balls.items[i].pos.z};
 
         double dist = dir.x * dir.x + dir.y * dir.y + dir.z * dir.z;
+        total_energy += balls.items[i].mass / dist;
 
         normal.x += 2 * balls.items[i].mass * dir.x / (dist * dist);
         normal.y += 2 * balls.items[i].mass * dir.y / (dist * dist);
         normal.z += 2 * balls.items[i].mass * dir.z / (dist * dist);
     }
+
+    Color color = {0};
+    for (size_t i = 0; i < balls.count; i++)
+    {
+        Vector3d dir = {
+            .x = v.pos.x - balls.items[i].pos.x,
+            .y = v.pos.y - balls.items[i].pos.y,
+            .z = v.pos.z - balls.items[i].pos.z};
+
+        double dist = dir.x * dir.x + dir.y * dir.y + dir.z * dir.z;
+        double energy = balls.items[i].mass / dist;
+        double factor = energy / total_energy;
+
+        color.r += (balls.items[i].color.r * factor);
+        color.g += (balls.items[i].color.g * factor);
+        color.b += (balls.items[i].color.b * factor);
+    }
+    color.a = 0xff;
 
     // normalize vector
     normal = vector3d_normalize(normal);
@@ -263,26 +285,15 @@ compute_vertex(Vector3d vertex, Grid grid, BallArray balls)
     v.text_coord.x = (theta + PI) / (2.0 * PI);
     v.text_coord.y = phi / PI;
 
+    v.color = color;
+
     return v;
-}
-
-Triangle
-compute_triangle(Vector3d vertices[3], Grid grid, BallArray balls)
-{
-    Triangle triangle;
-
-    triangle.vertex1 = compute_vertex(vertices[0], grid, balls);
-    triangle.vertex2 = compute_vertex(vertices[1], grid, balls);
-    triangle.vertex3 = compute_vertex(vertices[2], grid, balls);
-
-    return triangle;
 }
 
 Voxel compute_voxel(Index3d grid_pos, Grid grid)
 {
     Voxel voxel;
 
-    computed_voxel++;
     voxel.triangles.count = 0;
     voxel.bits = 0;
     for (size_t c = 0; c < 8; ++c)
@@ -424,10 +435,18 @@ void render_triangle(Voxel voxel, Camera camera)
         direction = vector3d_normalize(direction);
         double dotProduct = vector3d_dot_product(face_normal, direction);
 
-        DrawTriangle3D(v1, v2, v3, ColorBrightness(RED, dotProduct));
-        DrawLine3D(v1, v2, BLACK);
-        DrawLine3D(v2, v3, BLACK);
-        DrawLine3D(v3, v1, BLACK);
+        Color c;
+
+        c = (Color){
+            .r = (voxel.triangles.items[i].vertex1.color.r + voxel.triangles.items[i].vertex2.color.r + voxel.triangles.items[i].vertex3.color.r) / 3,
+            .g = (voxel.triangles.items[i].vertex1.color.g + voxel.triangles.items[i].vertex2.color.g + voxel.triangles.items[i].vertex3.color.g) / 3,
+            .b = (voxel.triangles.items[i].vertex1.color.b + voxel.triangles.items[i].vertex2.color.b + voxel.triangles.items[i].vertex3.color.b) / 3,
+            .a = 0xff};
+
+        DrawTriangle3D(v1, v2, v3, ColorBrightness(c, dotProduct * 0.75));
+        DrawLine3D(v1, v2, c);
+        DrawLine3D(v2, v3, c);
+        DrawLine3D(v3, v1, c);
     }
 }
 
@@ -457,15 +476,15 @@ bool has_voxels(Grid *grid)
 void push_neighbors(Voxel voxel, Grid *grid)
 {
     Index3d origin = voxel.corners[0].grid_pos;
-    if ((voxel.neighbors & 1) != 0 && origin.x < grid->count.x)
+    if ((voxel.neighbors & 1) != 0 && origin.x < grid->count.x - 1)
         push_voxel((Index3d){origin.x + 1, origin.y + 0, origin.z + 0}, grid);
     if ((voxel.neighbors & 2) != 0 && origin.x > 0)
         push_voxel((Index3d){origin.x - 1, origin.y + 0, origin.z + 0}, grid);
-    if ((voxel.neighbors & 4) != 0 && origin.y < grid->count.y)
+    if ((voxel.neighbors & 4) != 0 && origin.y < grid->count.y - 1)
         push_voxel((Index3d){origin.x + 0, origin.y + 1, origin.z + 0}, grid);
     if ((voxel.neighbors & 8) != 0 && origin.y > 0)
         push_voxel((Index3d){origin.x + 0, origin.y - 1, origin.z + 0}, grid);
-    if ((voxel.neighbors & 16) != 0 && origin.z < grid->count.z)
+    if ((voxel.neighbors & 16) != 0 && origin.z < grid->count.z - 1)
         push_voxel((Index3d){origin.x + 0, origin.y + 0, origin.z + 1}, grid);
     if ((voxel.neighbors & 32) != 0 && origin.z > 0)
         push_voxel((Index3d){origin.x + 0, origin.y + 0, origin.z - 1}, grid);
@@ -492,11 +511,18 @@ void push_neighbors(Voxel voxel, Grid *grid)
 bool search_field_limit(Index3d orig, Index3d *found, Grid grid)
 {
 
-    SEARCH_FIELD_LIMIT_LOOP(pos.x >= 0, pos.x--);
+    if (orig.x < 0 || orig.x >= grid.count.x ||
+        orig.y < 0 || orig.y >= grid.count.y ||
+        orig.z < 0 || orig.z >= grid.count.z)
+    {
+        return false;
+    }
+
+    SEARCH_FIELD_LIMIT_LOOP(pos.x >= 0 && pos.x < grid.count.x, pos.x--);
     SEARCH_FIELD_LIMIT_LOOP(pos.x < grid.count.x, pos.x++);
-    SEARCH_FIELD_LIMIT_LOOP(pos.y >= 0, pos.y--);
+    SEARCH_FIELD_LIMIT_LOOP(pos.y >= 0 && pos.y < grid.count.y, pos.y--);
     SEARCH_FIELD_LIMIT_LOOP(pos.y < grid.count.y, pos.y++);
-    SEARCH_FIELD_LIMIT_LOOP(pos.z >= 0, pos.z--);
+    SEARCH_FIELD_LIMIT_LOOP(pos.z >= 0 && pos.z < grid.count.z, pos.z--);
     SEARCH_FIELD_LIMIT_LOOP(pos.z < grid.count.z, pos.z++);
 
     return false;
@@ -641,6 +667,10 @@ void manage_keys(Grid grid, Camera *camera)
     {
         movement.z -= speed;
     }
+    if (IsKeyDown(KEY_SPACE))
+    {
+        update_time = !update_time;
+    }
 
     camera->position.x = grid.pos.x + sinf(0.5f * movement.x) * ((grid.count.x / 2) * grid.size.x * movement.z);
     camera->position.z = grid.pos.z + sinf(0.7f * movement.x) * ((grid.count.z / 2) * grid.size.z * movement.z);
@@ -650,16 +680,26 @@ void manage_keys(Grid grid, Camera *camera)
 void move_balls(Grid grid, BallArray balls, double t)
 {
     size_t i = 0;
-    {
-        balls.items[i].pos.x = grid.pos.x + sinf(0.5f * t) * grid.size.x * 2;
-        balls.items[i].pos.y = grid.pos.y + sinf(0.7f * t) * (grid.count.y / 2) * grid.size.y;
-        balls.items[i].pos.z = grid.pos.z + sinf(0.2f * t) * (grid.count.z / 4) * grid.size.z;
-    }
+    if (i >= balls.count)
+        return;
+    balls.items[i].pos.x = grid.pos.x + sinf(0.5f * t) * grid.size.x * 2;
+    balls.items[i].pos.y = grid.pos.y + sinf(0.7f * t) * (grid.count.y / 2) * grid.size.y;
+    balls.items[i].pos.z = grid.pos.z + sinf(0.2f * t) * (grid.count.z / 4) * grid.size.z;
 
     i = 2;
+    if (i >= balls.count)
+        return;
     balls.items[i].pos.x = 20 + sinf(2.50f * t) * grid.size.x;
     balls.items[i].pos.y = -20 + sinf(1.75f * t) * grid.size.y;
     balls.items[i].pos.z = 60 + sinf(0.82f * t) * grid.size.z;
+
+    i = 3;
+    if (i >= balls.count)
+        return;
+    // balls.items[i].pos.z = grid.pos.z + sinf(0.82f * t) * grid.size.z;
+    balls.items[i].pos.x = grid.pos.x + sinf(0.5f * t) * (grid.count.x / 2) * grid.size.x;
+    // balls.items[i].pos.y = grid.pos.y + sinf(0.7f * t) * (grid.count.y / 2) * grid.size.y;
+    // balls.items[i].pos.z = grid.pos.z + sinf(0.2f * t) * (grid.count.z / 4) * grid.size.z;
 }
 
 int main(int argc, char *argv[])
@@ -671,9 +711,10 @@ int main(int argc, char *argv[])
     Grid grid = make_grid(count, size, pos);
 
     BallArray balls = MB_CREATE_ARRAY(Ball, 5);
-    push_ball(&balls, (Ball){.pos = {.x = -20, .y = -20, .z = 120}, .mass = 120});
-    push_ball(&balls, (Ball){.pos = {.x = 20, .y = 20, .z = 100}, .mass = 300});
-    push_ball(&balls, (Ball){.pos = {.x = 20, .y = -20, .z = 60}, .mass = 150});
+    push_ball(&balls, (Ball){.pos = {.x = -20, .y = -20, .z = 120}, .mass = 100, .color = BLUE});
+    push_ball(&balls, (Ball){.pos = {.x = 20, .y = 20, .z = 100}, .mass = 300, .color = RED});
+    push_ball(&balls, (Ball){.pos = {.x = 20, .y = -20, .z = 60}, .mass = 150, .color = YELLOW});
+    push_ball(&balls, (Ball){.pos = {.x = 100, .y = 0, .z = 60}, .mass = 150, .color = GREEN});
 
     const int screenWidth = 800;
     const int screenHeight = 450;
@@ -688,15 +729,16 @@ int main(int argc, char *argv[])
 
     double screenshot_time = 4.90;
     InitWindow(screenWidth, screenHeight, "Metaballs");
-    // SetTargetFPS(60);
     while (!WindowShouldClose()) // Detect window close button or ESC key
     {
         cache_hit = 0;
         cache_miss = 0;
-        computed_voxel = 0;
         manage_keys(grid, &camera);
-        // move_balls(grid, balls, screenshot_time);
-        move_balls(grid, balls, GetTime());
+        if (update_time)
+        {
+            // move_balls(grid, balls, screenshot_time);
+            move_balls(grid, balls, GetTime());
+        }
 
         compute_metaball(balls, grid);
 
@@ -712,7 +754,7 @@ int main(int argc, char *argv[])
         sprintf(label_fps, "FPS: %d", GetFPS());
         DrawText(label_fps, 10, 10, 20, BLACK);
 
-        sprintf(label_fps, "HIT: %lu, MISS: %lu, COMP: %lu", cache_hit, cache_miss, computed_voxel);
+        sprintf(label_fps, "CACHE HIT: %lu, MISS: %lu", cache_hit, cache_miss);
         DrawText(label_fps, 10, 50, 20, BLACK);
 
         EndDrawing();
