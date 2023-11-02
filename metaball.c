@@ -11,11 +11,6 @@
 
 #include <raylib.h>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <profileapi.h>
-#endif
-
 #define THRESHOLD (0.3)
 
 #define MB_DEFINE_ARRAY(TYPE)          \
@@ -315,6 +310,47 @@ Voxel compute_voxel(Index3d grid_pos, Grid grid)
     return voxel;
 }
 
+Vector3d compute_edge_point(char edge, Vector3d orig, Voxel *voxel, Grid grid)
+{
+    Vector3d computedPoint;
+    char index0 = marching_cube_edges[edge][0];
+    char index1 = marching_cube_edges[edge][1];
+
+    // This table indicates what axis variations have the second index of marching_cube_edges
+    size_t coords[12] = {MB_COORD_X, MB_COORD_Z, MB_COORD_X, MB_COORD_Z,
+                         MB_COORD_X, MB_COORD_Z, MB_COORD_X, MB_COORD_Z,
+                         MB_COORD_Y, MB_COORD_Y, MB_COORD_Y, MB_COORD_Y};
+
+    size_t coord = coords[edge];
+    if (!grid.nodes.items[voxel->corners[index0].grid_index].cache[coord].dirty)
+    {
+        computedPoint = grid.nodes.items[voxel->corners[index0].grid_index].cache[coord].value;
+        cache_hit++;
+    }
+    else
+    {
+        cache_miss++;
+        double t = (THRESHOLD - voxel->corners[index0].energy) / (voxel->corners[index1].energy - voxel->corners[index0].energy);
+
+        double field_value[MB_COORD_COUNT];
+        for (size_t i = 0; i < MB_COORD_COUNT; ++i)
+        {
+            double field_intensity_0 = marching_cube_vertices[index0][i];
+            double field_intensity_1 = marching_cube_vertices[index1][i];
+            field_value[i] = field_intensity_0 + (field_intensity_1 - field_intensity_0) * t;
+        }
+
+        computedPoint = (Vector3d){
+            orig.x + field_value[MB_COORD_X] * grid.size.x,
+            orig.y + field_value[MB_COORD_Y] * grid.size.y,
+            orig.z + field_value[MB_COORD_Z] * grid.size.z};
+
+        grid.nodes.items[voxel->corners[index0].grid_index].cache[coord].value = computedPoint;
+        grid.nodes.items[voxel->corners[index0].grid_index].cache[coord].dirty = false;
+    }
+    return computedPoint;
+}
+
 void compute_voxel_triangles(Voxel *voxel, Grid grid, BallArray balls)
 {
 
@@ -328,64 +364,20 @@ void compute_voxel_triangles(Voxel *voxel, Grid grid, BallArray balls)
 
     Vector3d vertices[3];
     size_t i = 0;
-    while (1)
+
+    for (size_t t = 0; marching_cube_triangles[voxel->bits][t] != -1; t += 3)
     {
-        size_t vertex_index = i % 3;
-        char edge = marching_cube_triangles[voxel->bits][i++];
-        if (edge == (char)-1)
-        {
-            break;
-        }
+        Vector3d computedPoint1 = compute_edge_point(marching_cube_triangles[voxel->bits][t + 0], world_pos, voxel, grid);
+        Vector3d computedPoint2 = compute_edge_point(marching_cube_triangles[voxel->bits][t + 1], world_pos, voxel, grid);
+        Vector3d computedPoint3 = compute_edge_point(marching_cube_triangles[voxel->bits][t + 2], world_pos, voxel, grid);
 
-        char index0 = marching_cube_edges[edge][0];
-        char index1 = marching_cube_edges[edge][1];
-        Vector3d computedPoint;
+        Triangle triangle;
+        triangle.vertex1 = compute_vertex(computedPoint1, grid, balls);
+        triangle.vertex2 = compute_vertex(computedPoint2, grid, balls);
+        triangle.vertex3 = compute_vertex(computedPoint3, grid, balls);
 
-#define USE_CACHE
-#ifdef USE_CACHE
-        size_t coord = coords[edge];
-        if (!grid.nodes.items[voxel->corners[index0].grid_index].cache[coord].dirty)
-        {
-            computedPoint = grid.nodes.items[voxel->corners[index0].grid_index].cache[coord].value;
-            cache_hit++;
-        }
-        else
-        {
-#endif
-            cache_miss++;
-            double t = (THRESHOLD - voxel->corners[index0].energy) / (voxel->corners[index1].energy - voxel->corners[index0].energy);
-
-            double field_value[MB_COORD_COUNT];
-            for (size_t i = 0; i < MB_COORD_COUNT; ++i)
-            {
-                double field_intensity_0 = marching_cube_vertices[index0][i];
-                double field_intensity_1 = marching_cube_vertices[index1][i];
-                field_value[i] = field_intensity_0 + (field_intensity_1 - field_intensity_0) * t;
-            }
-
-            computedPoint = (Vector3d){
-                world_pos.x + field_value[MB_COORD_X] * grid.size.x,
-                world_pos.y + field_value[MB_COORD_Y] * grid.size.y,
-                world_pos.z + field_value[MB_COORD_Z] * grid.size.z};
-
-#ifdef USE_CACHE
-            grid.nodes.items[voxel->corners[index0].grid_index].cache[coord].value = computedPoint;
-            grid.nodes.items[voxel->corners[index0].grid_index].cache[coord].dirty = false;
-        }
-#endif
-        vertices[vertex_index] = computedPoint;
-
-        if (i % 3 == 0)
-        {
-
-            Triangle triangle;
-            triangle.vertex1 = compute_vertex(vertices[0], grid, balls);
-            triangle.vertex2 = compute_vertex(vertices[1], grid, balls);
-            triangle.vertex3 = compute_vertex(vertices[2], grid, balls);
-
-            voxel->triangles.items[voxel->triangles.count] = triangle;
-            voxel->triangles.count++;
-        }
+        voxel->triangles.items[voxel->triangles.count] = triangle;
+        voxel->triangles.count++;
     }
 }
 
@@ -450,7 +442,7 @@ void render_triangle(Voxel voxel, Camera camera)
     }
 }
 
-void push_voxel(Index3d pos, Grid *grid)
+void queue_voxel_push(Index3d pos, Grid *grid)
 {
     assert(grid->queue.count < grid->queue.capacity);
     size_t index = compute_grid_point_index(pos, *grid);
@@ -462,32 +454,32 @@ void push_voxel(Index3d pos, Grid *grid)
 }
 
 Index3d
-pop_voxel(Grid *grid)
+queue_voxel_pop(Grid *grid)
 {
     assert(grid->queue.count >= 0);
     return grid->queue.items[--grid->queue.count];
 }
 
-bool has_voxels(Grid *grid)
+bool queue_voxel_empty(Grid *grid)
 {
-    return (grid->queue.count > 0);
+    return (grid->queue.count == 0);
 }
 
-void push_neighbors(Voxel voxel, Grid *grid)
+void queue_voxel_push_neighbors(Voxel voxel, Grid *grid)
 {
     Index3d origin = voxel.corners[0].grid_pos;
     if ((voxel.neighbors & 1) != 0 && origin.x < grid->count.x - 1)
-        push_voxel((Index3d){origin.x + 1, origin.y + 0, origin.z + 0}, grid);
+        queue_voxel_push((Index3d){origin.x + 1, origin.y + 0, origin.z + 0}, grid);
     if ((voxel.neighbors & 2) != 0 && origin.x > 0)
-        push_voxel((Index3d){origin.x - 1, origin.y + 0, origin.z + 0}, grid);
+        queue_voxel_push((Index3d){origin.x - 1, origin.y + 0, origin.z + 0}, grid);
     if ((voxel.neighbors & 4) != 0 && origin.y < grid->count.y - 1)
-        push_voxel((Index3d){origin.x + 0, origin.y + 1, origin.z + 0}, grid);
+        queue_voxel_push((Index3d){origin.x + 0, origin.y + 1, origin.z + 0}, grid);
     if ((voxel.neighbors & 8) != 0 && origin.y > 0)
-        push_voxel((Index3d){origin.x + 0, origin.y - 1, origin.z + 0}, grid);
+        queue_voxel_push((Index3d){origin.x + 0, origin.y - 1, origin.z + 0}, grid);
     if ((voxel.neighbors & 16) != 0 && origin.z < grid->count.z - 1)
-        push_voxel((Index3d){origin.x + 0, origin.y + 0, origin.z + 1}, grid);
+        queue_voxel_push((Index3d){origin.x + 0, origin.y + 0, origin.z + 1}, grid);
     if ((voxel.neighbors & 32) != 0 && origin.z > 0)
-        push_voxel((Index3d){origin.x + 0, origin.y + 0, origin.z - 1}, grid);
+        queue_voxel_push((Index3d){origin.x + 0, origin.y + 0, origin.z - 1}, grid);
 }
 
 #define SEARCH_FIELD_LIMIT_LOOP(COMPARE, UPDATE)       \
@@ -544,15 +536,15 @@ void generate_mesh_opt(Camera camera, Grid *grid, BallArray balls)
             continue;
         }
 
-        push_voxel(pos_voxel, grid);
-        while (has_voxels(grid))
+        queue_voxel_push(pos_voxel, grid);
+        while (!queue_voxel_empty(grid))
         {
-            pos_voxel = pop_voxel(grid);
+            pos_voxel = queue_voxel_pop(grid);
 
             Voxel voxel = compute_voxel(pos_voxel, *grid);
             compute_voxel_triangles(&voxel, *grid, balls);
             render_triangle(voxel, camera);
-            push_neighbors(voxel, grid);
+            queue_voxel_push_neighbors(voxel, grid);
         }
     }
 }
