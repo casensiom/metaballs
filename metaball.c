@@ -10,6 +10,7 @@
 #include <assert.h>
 
 #include <raylib.h>
+#include <rlgl.h>
 
 #define THRESHOLD (0.3)
 
@@ -145,6 +146,7 @@ typedef struct grid_struct
 static size_t cache_hit = 0;
 static size_t cache_miss = 0;
 static bool update_time = true;
+static Mesh *metaball_mesh = 0x0;
 
 Vector3d
 vector3d_normalize(Vector3d v)
@@ -188,6 +190,101 @@ compute_grid_point_index(Index3d pos, Grid grid)
     return pos.x +
            (pos.y * grid.count.x) +
            (pos.z * grid.count.x * grid.count.y);
+}
+
+Mesh init_mesh(Grid grid)
+{
+    Mesh mesh = {0};
+
+    size_t max_triangles = grid.count.x * grid.count.y * grid.count.z * 5; // maximum 5 triangles per voxel
+    size_t max_vertex = max_triangles * 3;
+
+    mesh.vertexCount = max_vertex;
+    mesh.triangleCount = max_triangles;
+    mesh.vertices = (float *)RL_MALLOC(max_vertex * 3 * sizeof(float));
+    mesh.texcoords = (float *)RL_MALLOC(max_vertex * 2 * sizeof(float));
+    mesh.colors = (char *)RL_MALLOC(max_vertex * 4 * sizeof(char));
+    mesh.normals = (float *)RL_MALLOC(max_vertex * 3 * sizeof(float));
+    mesh.indices = (unsigned short *)RL_MALLOC(max_vertex * sizeof(unsigned short));
+
+    UploadMesh(&mesh, true);
+
+    mesh.vertexCount = 0;
+    mesh.triangleCount = 0;
+
+    return mesh;
+}
+
+void draw_mesh(Mesh *mesh, Material material, Matrix transform)
+{
+
+    UpdateMeshBuffer(*mesh, 0, mesh->vertices, mesh->vertexCount * 3 * sizeof(float), 0);
+    UpdateMeshBuffer(*mesh, 1, mesh->texcoords, mesh->vertexCount * 2 * sizeof(float), 0);
+    UpdateMeshBuffer(*mesh, 2, mesh->normals, mesh->vertexCount * 3 * sizeof(float), 0);
+    UpdateMeshBuffer(*mesh, 3, mesh->colors, mesh->vertexCount * 4 * sizeof(unsigned char), 0);
+    UpdateMeshBuffer(*mesh, 6, mesh->indices, mesh->triangleCount * 3 * sizeof(unsigned short), 0);
+
+    DrawMesh(*mesh, material, transform);
+
+    Material wired = LoadMaterialDefault();
+    wired.maps[MATERIAL_MAP_DIFFUSE].color = BLACK;
+
+    rlEnableWireMode();
+    DrawMesh(*mesh, wired, transform);
+    rlDisableWireMode();
+
+    mesh->vertexCount = 0;
+    mesh->triangleCount = 0;
+}
+
+void release_mesh(Mesh *mesh)
+{
+    UnloadMesh(*mesh);
+
+    mesh->vertices = 0x0;
+    mesh->texcoords = 0x0;
+    mesh->colors = 0x0;
+    mesh->normals = 0x0;
+    mesh->indices = 0x0;
+
+    mesh->vertexCount = 0;
+    mesh->triangleCount = 0;
+}
+
+void mesh_add_vertex(Mesh *mesh, Vertex3d v)
+{
+    // Mesh vertices position array
+    mesh->vertices[3 * mesh->vertexCount + 0] = v.pos.x;
+    mesh->vertices[3 * mesh->vertexCount + 1] = v.pos.y;
+    mesh->vertices[3 * mesh->vertexCount + 2] = v.pos.z;
+
+    // Mesh texcoords array
+    mesh->texcoords[2 * mesh->vertexCount + 0] = v.text_coord.x;
+    mesh->texcoords[2 * mesh->vertexCount + 1] = v.text_coord.y;
+
+    // Mesh colors array
+    mesh->colors[4 * mesh->vertexCount + 0] = v.color.r;
+    mesh->colors[4 * mesh->vertexCount + 1] = v.color.g;
+    mesh->colors[4 * mesh->vertexCount + 2] = v.color.b;
+    mesh->colors[4 * mesh->vertexCount + 3] = v.color.a;
+
+    // Mesh normals array
+    mesh->normals[3 * mesh->vertexCount + 0] = v.normal.x;
+    mesh->normals[3 * mesh->vertexCount + 1] = v.normal.y;
+    mesh->normals[3 * mesh->vertexCount + 2] = v.normal.z;
+
+    mesh->indices[mesh->vertexCount] = mesh->vertexCount;
+    mesh->vertexCount++;
+}
+
+void mesh_add_triangle(Mesh *mesh, Triangle t)
+{
+    // Mesh indices array initialization
+    mesh_add_vertex(mesh, t.vertex1);
+    mesh_add_vertex(mesh, t.vertex2);
+    mesh_add_vertex(mesh, t.vertex3);
+
+    mesh->triangleCount++;
 }
 
 void set_energy_point(Index3d grid_pos, Grid grid, double energy)
@@ -402,43 +499,11 @@ void compute_metaball(BallArray balls, Grid grid)
     }
 }
 
-void render_triangle(Voxel voxel, Camera camera)
+void build_triangle_mesh(Voxel voxel)
 {
     for (size_t i = 0; i < voxel.triangles.count; i++)
     {
-        Vector3 v1 = {voxel.triangles.items[i].vertex1.pos.x, voxel.triangles.items[i].vertex1.pos.y, voxel.triangles.items[i].vertex1.pos.z};
-        Vector3 v2 = {voxel.triangles.items[i].vertex2.pos.x, voxel.triangles.items[i].vertex2.pos.y, voxel.triangles.items[i].vertex2.pos.z};
-        Vector3 v3 = {voxel.triangles.items[i].vertex3.pos.x, voxel.triangles.items[i].vertex3.pos.y, voxel.triangles.items[i].vertex3.pos.z};
-
-        // Calculate side vectors AB y AC
-        Vector3d AB = {v2.x - v1.x, v2.y - v1.y, v2.z - v1.z};
-        Vector3d AC = {v3.x - v1.x, v3.y - v1.y, v3.z - v1.z};
-
-        // Compute triangle's normal
-        Vector3d face_normal = vector3d_cross_product(AB, AC);
-        face_normal = vector3d_normalize(face_normal);
-
-        // Vector from triangle's center to camera
-        Vector3d direction = {
-            .x = camera.position.x - (v1.x + v2.x + v3.x) / 3.0,
-            .y = camera.position.y - (v1.y + v2.y + v3.y) / 3.0,
-            .z = camera.position.z - (v1.z + v2.z + v3.z) / 3.0};
-
-        direction = vector3d_normalize(direction);
-        double dotProduct = vector3d_dot_product(face_normal, direction);
-
-        Color c;
-
-        c = (Color){
-            .r = (voxel.triangles.items[i].vertex1.color.r + voxel.triangles.items[i].vertex2.color.r + voxel.triangles.items[i].vertex3.color.r) / 3,
-            .g = (voxel.triangles.items[i].vertex1.color.g + voxel.triangles.items[i].vertex2.color.g + voxel.triangles.items[i].vertex3.color.g) / 3,
-            .b = (voxel.triangles.items[i].vertex1.color.b + voxel.triangles.items[i].vertex2.color.b + voxel.triangles.items[i].vertex3.color.b) / 3,
-            .a = 0xff};
-
-        DrawTriangle3D(v1, v2, v3, ColorBrightness(c, dotProduct * 0.75));
-        DrawLine3D(v1, v2, c);
-        DrawLine3D(v2, v3, c);
-        DrawLine3D(v3, v1, c);
+        mesh_add_triangle(metaball_mesh, voxel.triangles.items[i]);
     }
 }
 
@@ -520,7 +585,7 @@ bool search_field_limit(Index3d orig, Index3d *found, Grid grid)
     return false;
 }
 
-void generate_mesh_opt(Camera camera, Grid *grid, BallArray balls)
+void generate_mesh(Camera camera, Grid *grid, BallArray balls)
 {
 
     for (size_t i = 0; i < balls.count; i++)
@@ -543,25 +608,8 @@ void generate_mesh_opt(Camera camera, Grid *grid, BallArray balls)
 
             Voxel voxel = compute_voxel(pos_voxel, *grid);
             compute_voxel_triangles(&voxel, *grid, balls);
-            render_triangle(voxel, camera);
+            build_triangle_mesh(voxel);
             queue_voxel_push_neighbors(voxel, grid);
-        }
-    }
-}
-
-void generate_mesh(Camera camera, Grid grid, BallArray balls)
-{
-    size_t x, y, z, i;
-    for (x = 0; x < grid.count.x - 1; x++)
-    {
-        for (y = 0; y < grid.count.y - 1; y++)
-        {
-            for (z = 0; z < grid.count.z - 1; z++)
-            {
-                Voxel voxel = compute_voxel((Index3d){.x = x, .y = y, .z = z}, grid);
-                compute_voxel_triangles(&voxel, grid, balls);
-                render_triangle(voxel, camera);
-            }
         }
     }
 }
@@ -633,7 +681,7 @@ void push_ball(BallArray *balls, Ball ball)
 
 void manage_keys(Grid grid, Camera *camera)
 {
-    static Vector3d movement = {2.5, 0, 1.8};
+    static Vector3d movement = {0, 0, 2};
     double speed = 0.02;
     if (IsKeyDown(KEY_W))
     {
@@ -665,7 +713,7 @@ void manage_keys(Grid grid, Camera *camera)
     }
 
     camera->position.x = grid.pos.x + sinf(0.5f * movement.x) * ((grid.count.x / 2) * grid.size.x * movement.z);
-    camera->position.z = grid.pos.z + sinf(0.7f * movement.x) * ((grid.count.z / 2) * grid.size.z * movement.z);
+    camera->position.z = grid.pos.z + cosf(0.5f * movement.x) * ((grid.count.z / 2) * grid.size.z * movement.z);
     camera->position.y = grid.pos.y + sinf(0.5f * movement.y) * ((grid.count.y / 2) * grid.size.y * movement.z);
 }
 
@@ -721,6 +769,19 @@ int main(int argc, char *argv[])
 
     double screenshot_time = 4.90;
     InitWindow(screenWidth, screenHeight, "Metaballs");
+
+    Material material = LoadMaterialDefault();
+    material.maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
+    // material.maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("../texel_checker.png");
+
+    Matrix transform = (Matrix){1.0f, 0.0f, 0.0f, 0.0f,
+                                0.0f, 1.0f, 0.0f, 0.0f,
+                                0.0f, 0.0f, 1.0f, 0.0f,
+                                0.0f, 0.0f, 0.0f, 1.0f};
+
+    Mesh mesh = init_mesh(grid);
+    metaball_mesh = &mesh;
+
     while (!WindowShouldClose()) // Detect window close button or ESC key
     {
         cache_hit = 0;
@@ -735,26 +796,30 @@ int main(int argc, char *argv[])
         compute_metaball(balls, grid);
 
         BeginDrawing();
-        ClearBackground(RAYWHITE);
-        BeginMode3D(camera);
-        // generate_mesh(camera, grid, balls);
-        generate_mesh_opt(camera, &grid, balls);
-        // render(grid, balls);
-        EndMode3D();
+            ClearBackground(RAYWHITE);
+            BeginMode3D(camera);
 
-        char label_fps[256];
-        sprintf(label_fps, "FPS: %d", GetFPS());
-        DrawText(label_fps, 10, 10, 20, BLACK);
+                generate_mesh(camera, &grid, balls);
+                draw_mesh(metaball_mesh, material, transform);
 
-        sprintf(label_fps, "CACHE HIT: %lu, MISS: %lu", cache_hit, cache_miss);
-        DrawText(label_fps, 10, 50, 20, BLACK);
+            EndMode3D();
 
+            char label_fps[256];
+            sprintf(label_fps, "FPS: %d", GetFPS());
+            DrawText(label_fps, 10, 10, 20, BLACK);
+
+            sprintf(label_fps, "CACHE HIT: %lu, MISS: %lu", cache_hit, cache_miss);
+            DrawText(label_fps, 10, 50, 20, BLACK);
         EndDrawing();
     }
+
+    release_mesh(metaball_mesh);
+
     CloseWindow();
 
     MB_DESTROY_ARRAY(balls);
 
     free_grid(grid);
+
     return 0;
 }
