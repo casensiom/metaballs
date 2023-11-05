@@ -87,6 +87,10 @@ typedef struct ball_struct
     Vector3d pos;
     double mass;
     Color color;
+
+    // orbital params
+    Vector3d angular_speed;
+    Vector3d initial_pos;
 } Ball;
 MB_DEFINE_ARRAY(Ball);
 
@@ -138,14 +142,13 @@ typedef struct grid_struct
     Vector3d pos;
     Index3d count; // number of subdivision of space
     Vector3d size; // size of separation between space subdivisions
-    Vector3d offset;
+    Vector3d center;
     NodeArray nodes;
     Index3dArray queue; // list of pending voxels to compute
 } Grid;
 
 static size_t cache_hit = 0;
 static size_t cache_miss = 0;
-static bool update_time = true;
 static Mesh *metaball_mesh = 0x0;
 
 Vector3d
@@ -178,9 +181,9 @@ Vector3d
 compute_grid_point_coordinates(Index3d pos, Grid grid)
 {
     Vector3d out;
-    out.x = (pos.x * grid.size.x) + grid.offset.x;
-    out.y = (pos.y * grid.size.y) + grid.offset.y;
-    out.z = (pos.z * grid.size.z) + grid.offset.z;
+    out.x = (pos.x * grid.size.x);
+    out.y = (pos.y * grid.size.y);
+    out.z = (pos.z * grid.size.z);
     return out;
 }
 
@@ -215,7 +218,7 @@ Mesh init_mesh(Grid grid)
     return mesh;
 }
 
-void draw_mesh(Mesh *mesh, Material material, Matrix transform)
+void draw_mesh(Mesh *mesh, Material material, Material wired, Matrix transform)
 {
 
     UpdateMeshBuffer(*mesh, 0, mesh->vertices, mesh->vertexCount * 3 * sizeof(float), 0);
@@ -226,8 +229,6 @@ void draw_mesh(Mesh *mesh, Material material, Matrix transform)
 
     DrawMesh(*mesh, material, transform);
 
-    Material wired = LoadMaterialDefault();
-    wired.maps[MATERIAL_MAP_DIFFUSE].color = BLACK;
 
     rlEnableWireMode();
     DrawMesh(*mesh, wired, transform);
@@ -478,9 +479,7 @@ void compute_voxel_triangles(Voxel *voxel, Grid grid, BallArray balls)
     }
 }
 
-// PUBLIC API
-
-void compute_metaball(BallArray balls, Grid grid)
+void compute_energy_field(BallArray balls, Grid grid)
 {
     size_t x, y, z;
 
@@ -533,17 +532,20 @@ bool queue_voxel_empty(Grid *grid)
 void queue_voxel_push_neighbors(Voxel voxel, Grid *grid)
 {
     Index3d origin = voxel.corners[0].grid_pos;
-    if ((voxel.neighbors & 1) != 0 && origin.x < grid->count.x - 1)
+
+    if ((voxel.neighbors & 1) != 0 && origin.x + 1 < grid->count.x - 1)
         queue_voxel_push((Index3d){origin.x + 1, origin.y + 0, origin.z + 0}, grid);
-    if ((voxel.neighbors & 2) != 0 && origin.x > 0)
+    if ((voxel.neighbors & 2) != 0 && origin.x - 1 > 0)
         queue_voxel_push((Index3d){origin.x - 1, origin.y + 0, origin.z + 0}, grid);
-    if ((voxel.neighbors & 4) != 0 && origin.y < grid->count.y - 1)
+
+    if ((voxel.neighbors & 4) != 0 && origin.y + 1 < grid->count.y - 1)
         queue_voxel_push((Index3d){origin.x + 0, origin.y + 1, origin.z + 0}, grid);
-    if ((voxel.neighbors & 8) != 0 && origin.y > 0)
+    if ((voxel.neighbors & 8) != 0 && origin.y - 1 > 0)
         queue_voxel_push((Index3d){origin.x + 0, origin.y - 1, origin.z + 0}, grid);
-    if ((voxel.neighbors & 16) != 0 && origin.z < grid->count.z - 1)
+
+    if ((voxel.neighbors & 16) != 0 && origin.z + 1 < grid->count.z - 1)
         queue_voxel_push((Index3d){origin.x + 0, origin.y + 0, origin.z + 1}, grid);
-    if ((voxel.neighbors & 32) != 0 && origin.z > 0)
+    if ((voxel.neighbors & 32) != 0 && origin.z - 1 > 0)
         queue_voxel_push((Index3d){origin.x + 0, origin.y + 0, origin.z - 1}, grid);
 }
 
@@ -568,19 +570,19 @@ void queue_voxel_push_neighbors(Voxel voxel, Grid *grid)
 bool search_field_limit(Index3d orig, Index3d *found, Grid grid)
 {
 
-    if (orig.x < 0 || orig.x >= grid.count.x ||
-        orig.y < 0 || orig.y >= grid.count.y ||
-        orig.z < 0 || orig.z >= grid.count.z)
+    if (orig.x < 0 || orig.x >= grid.count.x - 1 ||
+        orig.y < 0 || orig.y >= grid.count.y - 1 ||
+        orig.z < 0 || orig.z >= grid.count.z - 1)
     {
         return false;
     }
 
-    SEARCH_FIELD_LIMIT_LOOP(pos.x >= 0 && pos.x < grid.count.x, pos.x--);
-    SEARCH_FIELD_LIMIT_LOOP(pos.x < grid.count.x, pos.x++);
-    SEARCH_FIELD_LIMIT_LOOP(pos.y >= 0 && pos.y < grid.count.y, pos.y--);
-    SEARCH_FIELD_LIMIT_LOOP(pos.y < grid.count.y, pos.y++);
-    SEARCH_FIELD_LIMIT_LOOP(pos.z >= 0 && pos.z < grid.count.z, pos.z--);
-    SEARCH_FIELD_LIMIT_LOOP(pos.z < grid.count.z, pos.z++);
+    SEARCH_FIELD_LIMIT_LOOP(pos.x >= 0 && pos.x < grid.count.x - 1, pos.x--);
+    SEARCH_FIELD_LIMIT_LOOP(pos.x < grid.count.x - 1, pos.x++);
+    SEARCH_FIELD_LIMIT_LOOP(pos.y >= 0 && pos.y < grid.count.y - 1, pos.y--);
+    SEARCH_FIELD_LIMIT_LOOP(pos.y < grid.count.y - 1, pos.y++);
+    SEARCH_FIELD_LIMIT_LOOP(pos.z >= 0 && pos.z < grid.count.z - 1, pos.z--);
+    SEARCH_FIELD_LIMIT_LOOP(pos.z < grid.count.z - 1, pos.z++);
 
     return false;
 }
@@ -592,9 +594,9 @@ void generate_mesh(Camera camera, Grid *grid, BallArray balls)
     {
         Vector3d pos = balls.items[i].pos;
         Index3d pos_voxel;
-        pos_voxel.x = (size_t)((pos.x - grid->offset.x) / grid->size.x);
-        pos_voxel.y = (size_t)((pos.y - grid->offset.y) / grid->size.y);
-        pos_voxel.z = (size_t)((pos.z - grid->offset.z) / grid->size.z);
+        pos_voxel.x = (size_t)floor(pos.x / grid->size.x);
+        pos_voxel.y = (size_t)floor(pos.y / grid->size.y);
+        pos_voxel.z = (size_t)floor(pos.z / grid->size.z);
 
         if (!search_field_limit(pos_voxel, &pos_voxel, *grid))
         {
@@ -614,47 +616,36 @@ void generate_mesh(Camera camera, Grid *grid, BallArray balls)
     }
 }
 
-void render(Grid grid, BallArray balls)
+void render(Grid grid)
 {
-    size_t x, y, z, i;
-
-    Vector3 rotationAxis = {.x = 0, .y = 0, .z = 0};
-
-    for (x = 0; x < grid.count.x; x++)
-    {
-        for (y = 0; y < grid.count.y; y++)
-        {
-            for (z = 0; z < grid.count.z; z++)
-            {
-                Vector3 center = {
-                    .x = x * grid.size.x + grid.offset.x,
-                    .y = y * grid.size.y + grid.offset.y,
-                    .z = z * grid.size.z + grid.offset.z};
-
-                size_t grid_index = compute_grid_point_index((Index3d){.x = x, .y = y, .z = z}, grid);
-                if (grid.nodes.items[grid_index].energy <= THRESHOLD)
-                {
-                    // DrawCircle3D(center, grid.size.x * 0.05f, rotationAxis, 0, BLUE);
-                    DrawPoint3D(center, BLUE);
-                }
-            }
-        }
-    }
+    Vector3 center = (Vector3){
+        .x = grid.center.x,
+        .y = grid.center.y,
+        .z = grid.center.z};
+    Vector3 size = (Vector3){
+        .x = grid.count.x * grid.size.x,
+        .y = grid.count.y * grid.size.y,
+        .z = grid.count.z * grid.size.z};
+    DrawCubeWiresV(center, size, BLACK);
 }
 
 Grid make_grid(Index3d count, Vector3d size, Vector3d pos)
 {
     Grid grid;
 
-    Vector3d offset = {
-        .x = pos.x - size.x * ((count.x - 0.5) / 2.0),
-        .y = pos.y - size.y * ((count.y - 0.5) / 2.0),
-        .z = pos.z - size.z * ((count.z - 0.5) / 2.0)};
+    double center_x = pos.x + ((count.x * size.x) + 0.5) / 2.0;
+    double center_y = pos.y + ((count.y * size.y) + 0.5) / 2.0;
+    double center_z = pos.z + ((count.z * size.z) + 0.5) / 2.0;
+
+    Vector3d center = {
+        .x = center_x,
+        .y = center_y,
+        .z = center_z};
 
     grid.count = count;
     grid.size = size;
     grid.pos = pos;
-    grid.offset = offset;
+    grid.center = center;
     grid.nodes = MB_CREATE_ARRAY(Node, grid.count.x * grid.count.y * grid.count.z);
     grid.queue = MB_CREATE_ARRAY(Index3d, grid.count.x * grid.count.y * grid.count.z);
 
@@ -663,11 +654,10 @@ Grid make_grid(Index3d count, Vector3d size, Vector3d pos)
 
 void free_grid(Grid grid)
 {
-
     grid.count = (Index3d){.x = 0, .y = 0, .z = 0};
     grid.size = (Vector3d){.x = 0, .y = 0, .z = 0};
     grid.pos = (Vector3d){.x = 0, .y = 0, .z = 0};
-    grid.offset = (Vector3d){.x = 0, .y = 0, .z = 0};
+    grid.center = (Vector3d){.x = 0, .y = 0, .z = 0};
 
     MB_DESTROY_ARRAY(grid.nodes);
     MB_DESTROY_ARRAY(grid.queue);
@@ -679,67 +669,50 @@ void push_ball(BallArray *balls, Ball ball)
     balls->count++;
 }
 
-void manage_keys(Grid grid, Camera *camera)
-{
-    static Vector3d movement = {0, 0, 2};
-    double speed = 0.02;
-    if (IsKeyDown(KEY_W))
-    {
-        movement.y += speed;
-    }
-    else if (IsKeyDown(KEY_S))
-    {
-        movement.y -= speed;
-    }
-    if (IsKeyDown(KEY_A))
-    {
-        movement.x += speed;
-    }
-    else if (IsKeyDown(KEY_D))
-    {
-        movement.x -= speed;
-    }
-    if (IsKeyDown(KEY_Q))
-    {
-        movement.z += speed;
-    }
-    else if (IsKeyDown(KEY_E))
-    {
-        movement.z -= speed;
-    }
-    if (IsKeyDown(KEY_SPACE))
-    {
-        update_time = !update_time;
-    }
-
-    camera->position.x = grid.pos.x + sinf(0.5f * movement.x) * ((grid.count.x / 2) * grid.size.x * movement.z);
-    camera->position.z = grid.pos.z + cosf(0.5f * movement.x) * ((grid.count.z / 2) * grid.size.z * movement.z);
-    camera->position.y = grid.pos.y + sinf(0.5f * movement.y) * ((grid.count.y / 2) * grid.size.y * movement.z);
-}
-
 void move_balls(Grid grid, BallArray balls, double t)
 {
-    size_t i = 0;
-    if (i >= balls.count)
-        return;
-    balls.items[i].pos.x = grid.pos.x + sinf(0.5f * t) * grid.size.x * 2;
-    balls.items[i].pos.y = grid.pos.y + sinf(0.7f * t) * (grid.count.y / 2) * grid.size.y;
-    balls.items[i].pos.z = grid.pos.z + sinf(0.2f * t) * (grid.count.z / 4) * grid.size.z;
+    double radius_x = (grid.count.x * grid.size.x) / 4;
+    double radius_y = (grid.count.y * grid.size.y) / 4;
+    double radius_z = (grid.count.z * grid.size.z) / 4;
 
-    i = 2;
-    if (i >= balls.count)
-        return;
-    balls.items[i].pos.x = 20 + sinf(2.50f * t) * grid.size.x;
-    balls.items[i].pos.y = -20 + sinf(1.75f * t) * grid.size.y;
-    balls.items[i].pos.z = 60 + sinf(0.82f * t) * grid.size.z;
+    for (size_t i = 0; i < balls.count; i++)
+    {
+        balls.items[i].pos = (Vector3d){
+            .x = grid.center.x + radius_x * cos(balls.items[i].angular_speed.x * t + balls.items[i].initial_pos.x),
+            .y = grid.center.y + radius_y * sin(balls.items[i].angular_speed.y * t + balls.items[i].initial_pos.y),
+            .z = grid.center.z + radius_z * cos(balls.items[i].angular_speed.z * t + balls.items[i].initial_pos.z)};
+    }
+}
 
-    i = 3;
-    if (i >= balls.count)
-        return;
-    // balls.items[i].pos.z = grid.pos.z + sinf(0.82f * t) * grid.size.z;
-    balls.items[i].pos.x = grid.pos.x + sinf(0.5f * t) * (grid.count.x / 2) * grid.size.x;
-    // balls.items[i].pos.y = grid.pos.y + sinf(0.7f * t) * (grid.count.y / 2) * grid.size.y;
-    // balls.items[i].pos.z = grid.pos.z + sinf(0.2f * t) * (grid.count.z / 4) * grid.size.z;
+Ball random_ball(Grid grid)
+{
+    double radius_x = (grid.count.x * grid.size.x) / 4;
+    double radius_y = (grid.count.y * grid.size.y) / 4;
+    double radius_z = (grid.count.z * grid.size.z) / 4;
+
+    Vector3d speed = {
+        .x = 0.1 + (float)rand() / ((float)RAND_MAX / 2.0),
+        .y = 0.1 + (float)rand() / ((float)RAND_MAX / 2.0),
+        .z = 0.1 + (float)rand() / ((float)RAND_MAX / 2.0)};
+
+    Vector3d initial = {
+        .x = 1.0 - (float)rand() / ((float)RAND_MAX / 2.0),
+        .y = 1.0 - (float)rand() / ((float)RAND_MAX / 2.0),
+        .z = 1.0 - (float)rand() / ((float)RAND_MAX / 2.0)};
+
+    Vector3d p =  (Vector3d){
+        .x = grid.center.x + radius_x * cos(initial.x),
+        .y = grid.center.y + radius_y * sin(initial.y),
+        .z = grid.center.z + radius_z * cos(initial.z)};
+
+    Color pallete[] = {LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED,
+                       MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE,
+                       VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN};
+
+    size_t color_index = rand() / (RAND_MAX / 20);
+    double ball_mass = 50 + rand() / (RAND_MAX / 200);
+
+    return (Ball){.pos = p, .mass = ball_mass, .color = pallete[color_index], .initial_pos = initial, .angular_speed = speed};
 }
 
 int main(int argc, char *argv[])
@@ -747,28 +720,31 @@ int main(int argc, char *argv[])
 
     Index3d count = {.x = 20, .y = 20, .z = 20};
     Vector3d size = {.x = 10, .y = 10, .z = 10};
-    Vector3d pos = {.x = 0, .y = 0, .z = 100};
+    Vector3d pos = {.x = 0, .y = 0, .z = 0};
     Grid grid = make_grid(count, size, pos);
 
     BallArray balls = MB_CREATE_ARRAY(Ball, 5);
-    push_ball(&balls, (Ball){.pos = {.x = -20, .y = -20, .z = 120}, .mass = 100, .color = BLUE});
-    push_ball(&balls, (Ball){.pos = {.x = 20, .y = 20, .z = 100}, .mass = 300, .color = RED});
-    push_ball(&balls, (Ball){.pos = {.x = 20, .y = -20, .z = 60}, .mass = 150, .color = YELLOW});
-    push_ball(&balls, (Ball){.pos = {.x = 100, .y = 0, .z = 60}, .mass = 150, .color = GREEN});
+    for (size_t i = 0; i < balls.capacity; i++)
+    {
+        push_ball(&balls, random_ball(grid));
+    }
 
-    const int screenWidth = 800;
-    const int screenHeight = 450;
+    const int screenWidth = 640;
+    const int screenHeight = 480;
 
     // Define the camera to look into our 3d world
     Camera camera = {0};
-    camera.position = (Vector3){0.0f, 0.0f, 0.0f}; // Camera position
-    camera.target = (Vector3){0.0f, 0.0f, 100.0f}; // Camera looking at point
-    camera.up = (Vector3){0.0f, 1.0f, 0.0f};       // Camera up vector (rotation towards target)
-    camera.fovy = 45.0f;                           // Camera field-of-view Y
-    camera.projection = CAMERA_PERSPECTIVE;        // Camera projection type
+    camera.position = (Vector3){grid.center.x, grid.center.y, grid.center.z - grid.count.z * grid.size.z * 2}; // Camera position
+    camera.target = (Vector3){grid.center.x, grid.center.y, grid.center.z};                                    // Camera looking at point
+    camera.up = (Vector3){0.0f, 1.0f, 0.0f};                                                                   // Camera up vector (rotation towards target)
+    camera.fovy = 45.0f;                                                                                       // Camera field-of-view Y
+    camera.projection = CAMERA_PERSPECTIVE;                                                                    // Camera projection type
 
-    double screenshot_time = 4.90;
     InitWindow(screenWidth, screenHeight, "Metaballs");
+
+
+    Material wired = LoadMaterialDefault();
+    wired.maps[MATERIAL_MAP_DIFFUSE].color = GRAY;
 
     Material material = LoadMaterialDefault();
     material.maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
@@ -782,26 +758,28 @@ int main(int argc, char *argv[])
     Mesh mesh = init_mesh(grid);
     metaball_mesh = &mesh;
 
+    DisableCursor();
     while (!WindowShouldClose()) // Detect window close button or ESC key
     {
         cache_hit = 0;
         cache_miss = 0;
-        manage_keys(grid, &camera);
-        if (update_time)
+        // manage_keys(grid, &camera);
+        UpdateCamera(&camera, CAMERA_THIRD_PERSON);
+        camera.target = (Vector3){grid.center.x, grid.center.y, grid.center.z};
+
+        if (!IsKeyDown(KEY_SPACE))
         {
-            // move_balls(grid, balls, screenshot_time);
             move_balls(grid, balls, GetTime());
         }
 
-        compute_metaball(balls, grid);
+        compute_energy_field(balls, grid);
+        generate_mesh(camera, &grid, balls);
 
         BeginDrawing();
             ClearBackground(RAYWHITE);
             BeginMode3D(camera);
-
-                generate_mesh(camera, &grid, balls);
-                draw_mesh(metaball_mesh, material, transform);
-
+                draw_mesh(metaball_mesh, material, wired, transform);
+                render(grid);
             EndMode3D();
 
             char label_fps[256];
