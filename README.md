@@ -3,7 +3,10 @@
 
 ## Description
 
-This proyect builds a metaball in pure C, uses raylib to render it.
+[![Build Status](https://github.com/casensiom/metaballs/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/casensiom/metaballs/actions)
+
+
+This proyect computes metaballs in pure C, using raylib to render it.
 
 There are optimizations to be done.
 
