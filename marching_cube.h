@@ -63,7 +63,7 @@ static char marching_cube_neighbors[256] =
 };
 
 // Cube vertices
-static float marching_cube_vertices[8][3] = 
+static int marching_cube_vertices[8][3] = 
 {
     {0,0,0},
     {1,0,0},

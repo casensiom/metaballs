@@ -10,11 +10,13 @@ This proyect computes metaballs in pure C, using raylib to render it.
 
 There are optimizations to be done.
 
+## Features
+- **Iteration**: Added a method to visit only valid neighbors.
+- **Optimization**: A rudimentary cache system is included.
+- **Color**: Added color per ball.
+- **Texture mapping**: Generate and upload mesh to GPU, texture mapping is available.
+- **Control**: Added mouse and keyboard control.
+
 ## TODO
 
- - ~~Iteration~~. Added a method to visit only valid neighbors.
- - ~~Compute the edge values only once~~. A rudimentary cache system is included.
- - ~~Add color~~. Added color per ball.
- - ~~Add texture mapping~~. Generate and upload mesh to GPU, texture mapping is available.
- - ~~Control~~. Added mouse and keyboard control.
- - Clean code, separate voxel calculation and render code.
+  - Known issue. There is a glich when the grid position is not zero, some balls are randomly dissapearing.

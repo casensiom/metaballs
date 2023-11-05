@@ -17,7 +17,7 @@ if (NOT raylib_FOUND)
 endif()
 
 message(STATUS "PROJECT_NAME: ${PROJECT_NAME}")
-add_executable(${PROJECT_NAME} metaball.c marching_cube.h)
+add_executable(${PROJECT_NAME} main.c metaballs.h marching_cube.h)
 target_link_libraries(${PROJECT_NAME} PUBLIC raylib)
 
 add_custom_target(copy_assets
