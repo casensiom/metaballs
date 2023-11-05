@@ -1,17 +1,20 @@
 # Metaballs
 
-Header only metaballs generator in ANSI C
+![Thumbnail](./thumbnail.jpg)
 
-![Thumbnail](./thumbnail.gif)
+Header only 3d metaballs generator in ANSI C
 
 ## About
 
 [![Build Status](https://github.com/casensiom/metaballs/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/casensiom/metaballs/actions)
 
+This library computes 3d metaballs in pure ANSI C.
 
-This proyect computes metaballs in pure ANSI C.
+![Thumbnail](./thumbnail.gif)
 
 There are optimizations yet to be done.
+
+The example uses [raylib](https://www.raylib.com) as a render engine.
 
 ## How to use
 
