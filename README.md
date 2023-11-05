@@ -19,4 +19,4 @@ There are optimizations to be done.
 
 ## TODO
 
-  - Known issue. There is a glich when the grid position is not zero, some balls are randomly dissapearing.
+  - Known issue. The spheric texture mapping doesn't close correctly.

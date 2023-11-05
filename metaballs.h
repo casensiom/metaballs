@@ -239,6 +239,13 @@ size_t compute_grid_point_index(Index3d pos, Grid grid)
            (pos.z * grid.count.x * grid.count.y);
 }
 
+Index3d compute_grid_index(Vector3d pos, Grid grid) {
+    Index3d out;
+    out.x = (size_t)floor((pos.x - grid.pos.x) / grid.size.x);
+    out.y = (size_t)floor((pos.y - grid.pos.y) / grid.size.y);
+    out.z = (size_t)floor((pos.z - grid.pos.z) / grid.size.z);
+    return out;
+}
 //--
 
 Mesh3d mesh_create(Grid grid)
@@ -604,10 +611,7 @@ void generate_mesh(Grid *grid, BallArray balls)
     for (size_t i = 0; i < balls.count; i++)
     {
         Vector3d pos = balls.items[i].pos;
-        Index3d pos_voxel;
-        pos_voxel.x = (size_t)floor(pos.x / grid->size.x);
-        pos_voxel.y = (size_t)floor(pos.y / grid->size.y);
-        pos_voxel.z = (size_t)floor(pos.z / grid->size.z);
+        Index3d pos_voxel = compute_grid_index(pos, *grid);
 
         if (!search_field_limit(pos_voxel, &pos_voxel, *grid))
         {
