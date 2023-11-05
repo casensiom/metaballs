@@ -1,3 +1,8 @@
+// Metaballs library generator - v1.0 - public domain
+// https://github.com/casensiom/metaballs
+//
+
+
 #ifndef _METABALLS_H_
 #define _METABALLS_H_
 
