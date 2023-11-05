@@ -44,14 +44,38 @@ void raylib_render_mesh(Grid grid, Mesh *mesh, Material material, Material wired
     }
 
     Vector3 center = (Vector3){
-        .x = grid.center.x,
-        .y = grid.center.y,
-        .z = grid.center.z};
+        .x = grid.center.x - grid.size.x * 0.5f,
+        .y = grid.center.y - grid.size.y * 0.5f,
+        .z = grid.center.z - grid.size.z * 0.5f};
     Vector3 size = (Vector3){
-        .x = grid.count.x * grid.size.x,
-        .y = grid.count.y * grid.size.y,
-        .z = grid.count.z * grid.size.z};
+        .x = (grid.count.x-1) * grid.size.x,
+        .y = (grid.count.y-1) * grid.size.y,
+        .z = (grid.count.z-1) * grid.size.z};
     DrawCubeWiresV(center, size, BLACK);
+
+    Vector3 orig = (Vector3){
+        .x = grid.pos.x,
+        .y = grid.pos.y,
+        .z = grid.pos.z};
+    DrawSphere(orig, 2, BLACK);
+    
+    
+    // for (size_t x = 0; x < grid.count.x; x++)
+    // {
+    //     for (size_t z = 0; z < grid.count.z; z++)
+    //     {
+    //         Vector3 orig = (Vector3){
+    //             .x = grid.pos.x + x * grid.size.x,
+    //             .y = grid.pos.y,
+    //             .z = grid.pos.z + z * grid.size.z};
+    //         Vector3 end = (Vector3){
+    //             .x = grid.pos.x + x * grid.size.x,
+    //             .y = grid.pos.y + (grid.count.y - 1) * grid.size.y,
+    //             .z = grid.pos.z + z * grid.size.z};
+
+    //         DrawLine3D(orig, end, BLUE);
+    //     }
+    // }
 }
 
 void raylib_unload_mesh(Mesh *mesh)
