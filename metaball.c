@@ -748,7 +748,7 @@ int main(int argc, char *argv[])
 
     Material material = LoadMaterialDefault();
     material.maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
-    // material.maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("../texel_checker.png");
+    material.maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/texel_checker.png");
 
     Matrix transform = (Matrix){1.0f, 0.0f, 0.0f, 0.0f,
                                 0.0f, 1.0f, 0.0f, 0.0f,

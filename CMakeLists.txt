@@ -19,3 +19,8 @@ endif()
 message(STATUS "PROJECT_NAME: ${PROJECT_NAME}")
 add_executable(${PROJECT_NAME} metaball.c marching_cube.h)
 target_link_libraries(${PROJECT_NAME} PUBLIC raylib)
+
+add_custom_target(copy_assets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/assets ${CMAKE_CURRENT_BINARY_DIR}/assets
+)
+add_dependencies(${PROJECT_NAME} copy_assets)
