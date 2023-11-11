@@ -2,13 +2,13 @@
 
 ![Thumbnail](./thumbnail.jpg)
 
-Header only 3d metaballs generator in ANSI C
+Header only 3d metaballs generator in C99
 
 ## About
 
 [![Build Status](https://github.com/casensiom/metaballs/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/casensiom/metaballs/actions)
 
-This library computes 3d metaballs in pure ANSI C.
+This library computes 3d metaballs in pure C99.
 
 ![Thumbnail](./thumbnail.gif)
 
