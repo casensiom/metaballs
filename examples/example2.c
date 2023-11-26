@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
     Index3d count = {.x = 40, .y = 10, .z = 20};
     Vector3d size = {.x = 10, .y = 10, .z = 10};
     Vector3d pos = {.x = 0, .y = 0, .z = 0};
-    Grid grid = grid_create(count, size, pos);
+    Grid grid = metaball_grid_create(count, size, pos);
     grid.config.wired = true;
     grid.config.threshold = 0.2;
 
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
         if(IsKeyPressed(KEY_J)) {
             grid.config.threshold -= 0.05f;
         }
-        generate_mesh(&grid, balls);
+        metaball_generate_mesh(&grid, balls);
 
         BeginDrawing();
             ClearBackground(RAYWHITE);
@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
     // RL unload mesh
     raylib_unload_mesh(&rayMesh);
     MB_DESTROY_ARRAY(balls);
-    grid_destroy(&grid);
+    metaball_grid_destroy(&grid);
 
     CloseWindow();
 

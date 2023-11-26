@@ -5,8 +5,6 @@
 #ifndef _METABALLS_H_
 #define _METABALLS_H_
 
-// #include "marching_cube.h"
-
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -16,10 +14,6 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-
-#ifndef PI
-#define PI 3.14159265
-#endif
 
 #define MB_DEFINE_ARRAY(TYPE)          \
     typedef struct TYPE##_struct_array \
@@ -186,17 +180,11 @@ extern "C"
 {
 #endif
 
-    Grid grid_create(Index3d count, Vector3d size, Vector3d pos);
+    Grid metaball_grid_create(Index3d count, Vector3d size, Vector3d pos);
 
-    void grid_destroy(Grid *grid);
+    void metaball_grid_destroy(Grid *grid);
 
-    void push_ball(BallArray *balls, Ball ball);
-
-    void move_balls(Grid grid, BallArray balls, float t);
-
-    Ball random_ball(Grid grid);
-
-    void generate_mesh(Grid *grid, BallArray balls);
+    void metaball_generate_mesh(Grid *grid, BallArray balls);
 
 #if defined(__cplusplus)
 }
@@ -211,15 +199,12 @@ static char marching_cube_edges[12][2];
 static int marching_cube_vertices[8][3];
 static char marching_cube_neighbors[256];
 
-static size_t cache_hit = 0;
-static size_t cache_miss = 0;
-
-float clamp(float v, float min, float max)
+static float clamp(float v, float min, float max)
 {
     return (v < min) ? min : (v > max) ? max : v;
 }
 
-Vector3d vector3d_add(Vector3d orig, Vector3d val)
+static Vector3d vector3d_add(Vector3d orig, Vector3d val)
 {
     return (Vector3d){
         .x = orig.x + val.x,
@@ -227,7 +212,7 @@ Vector3d vector3d_add(Vector3d orig, Vector3d val)
         .z = orig.z + val.z};
 }
 
-Vector3d vector3d_substract(Vector3d orig, Vector3d val)
+static Vector3d vector3d_substract(Vector3d orig, Vector3d val)
 {
     return (Vector3d){
         .x = orig.x - val.x,
@@ -235,7 +220,7 @@ Vector3d vector3d_substract(Vector3d orig, Vector3d val)
         .z = orig.z - val.z};
 }
 
-Vector3d vector3d_multiply(Vector3d v, float factor)
+static Vector3d vector3d_multiply(Vector3d v, float factor)
 {
     return (Vector3d){
         .x = v.x * factor,
@@ -243,7 +228,7 @@ Vector3d vector3d_multiply(Vector3d v, float factor)
         .z = v.z * factor};
 }
 
-float vector3d_length(Vector3d start, Vector3d end)
+static float vector3d_length(Vector3d start, Vector3d end)
 {
     float x = end.x - start.x;
     float y = end.y - start.y;
@@ -251,7 +236,7 @@ float vector3d_length(Vector3d start, Vector3d end)
     return sqrtf(x * x + y * y + z * z);
 }
 
-Vector3d vector3d_normalize(Vector3d v)
+static Vector3d vector3d_normalize(Vector3d v)
 {
     float magnitude = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
     v.x /= magnitude;
@@ -260,7 +245,7 @@ Vector3d vector3d_normalize(Vector3d v)
     return v;
 }
 
-Vector3d vector3d_cross_product(Vector3d v1, Vector3d v2)
+static Vector3d vector3d_cross_product(Vector3d v1, Vector3d v2)
 {
     Vector3d result;
     result.x = v1.y * v2.z - v1.z * v2.y;
@@ -269,12 +254,12 @@ Vector3d vector3d_cross_product(Vector3d v1, Vector3d v2)
     return result;
 }
 
-float vector3d_dot_product(Vector3d v1, Vector3d v2)
+static float vector3d_dot_product(Vector3d v1, Vector3d v2)
 {
     return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
-Vector3d compute_grid_point_coordinates(Index3d pos, Grid grid)
+static Vector3d compute_grid_point_coordinates(Index3d pos, Grid grid)
 {
     Vector3d out;
     out.x = grid.pos.x + (pos.x * grid.size.x);
@@ -283,7 +268,7 @@ Vector3d compute_grid_point_coordinates(Index3d pos, Grid grid)
     return out;
 }
 
-size_t compute_grid_point_index(Index3d pos, Grid grid)
+static size_t compute_grid_point_index(Index3d pos, Grid grid)
 {
     size_t ret = pos.x +
                  (pos.y * grid.count.x) +
@@ -292,7 +277,7 @@ size_t compute_grid_point_index(Index3d pos, Grid grid)
     return ret;
 }
 
-Index3d compute_grid_index(Vector3d pos, Grid grid)
+static Index3d compute_grid_index(Vector3d pos, Grid grid)
 {
     Index3d out;
     out.x = (size_t)floor((pos.x - grid.pos.x) / grid.size.x);
@@ -302,7 +287,7 @@ Index3d compute_grid_index(Vector3d pos, Grid grid)
 }
 //--
 
-Mesh3d mesh_create(Grid grid)
+static Mesh3d mesh_create(Grid grid)
 {
     Mesh3d mesh = {0};
 
@@ -322,7 +307,7 @@ Mesh3d mesh_create(Grid grid)
     return mesh;
 }
 
-void mesh_destroy(Mesh3d *mesh)
+static void mesh_destroy(Mesh3d *mesh)
 {
     free(mesh->vertices);
     free(mesh->texcoords);
@@ -333,7 +318,7 @@ void mesh_destroy(Mesh3d *mesh)
     *mesh = (Mesh3d){0};
 }
 
-void mesh_add_vertex(Mesh3d *mesh, Vertex3d v)
+static void mesh_add_vertex(Mesh3d *mesh, Vertex3d v)
 {
     mesh->vertices[3 * mesh->vertexCount + 0] = v.pos.x;
     mesh->vertices[3 * mesh->vertexCount + 1] = v.pos.y;
@@ -355,7 +340,7 @@ void mesh_add_vertex(Mesh3d *mesh, Vertex3d v)
     mesh->vertexCount++;
 }
 
-void mesh_add_triangle(Mesh3d *mesh, Triangle t)
+static void mesh_add_triangle(Mesh3d *mesh, Triangle t)
 {
     mesh_add_vertex(mesh, t.vertex1);
     mesh_add_vertex(mesh, t.vertex2);
@@ -364,9 +349,7 @@ void mesh_add_triangle(Mesh3d *mesh, Triangle t)
     mesh->triangleCount++;
 }
 
-//--
-
-void set_energy_point(Index3d grid_pos, Grid grid, float energy)
+static void set_energy_point(Index3d grid_pos, Grid grid, float energy)
 {
     assert(grid_pos.x < grid.count.x);
     assert(grid_pos.y < grid.count.y);
@@ -380,7 +363,7 @@ void set_energy_point(Index3d grid_pos, Grid grid, float energy)
     grid.nodes.items[grid_index].visited = false;
 }
 
-float compute_energy(Vector3d world_pos, BallArray balls)
+static float compute_energy(Vector3d world_pos, BallArray balls)
 {
     //  e = mass/distance^2
 
@@ -405,7 +388,7 @@ float compute_energy(Vector3d world_pos, BallArray balls)
     return energy;
 }
 
-Vector3d compute_normal_balls(Vector3d pos, BallArray balls)
+static Vector3d compute_normal_balls(Vector3d pos, BallArray balls)
 {
     Vector3d nor = (Vector3d){.x = 0.0, .y = 0.0001, .z = 0.0};
 
@@ -441,7 +424,7 @@ Vector3d compute_normal_balls(Vector3d pos, BallArray balls)
     return vector3d_normalize(nor);
 }
 
-Vertex3d compute_vertex(Vector3d vertex, Grid grid, BallArray balls)
+static Vertex3d compute_vertex(Vector3d vertex, Grid grid, BallArray balls)
 {
     Vertex3d v;
     v.pos = vertex;
@@ -494,11 +477,11 @@ Vertex3d compute_vertex(Vector3d vertex, Grid grid, BallArray balls)
     }
     else
     {
-
+        const float pi = 3.14159265;
         float theta = atan2(v.normal.x, v.normal.z);
         float phi = acos(v.normal.y);
-        v.text_coord.x = (theta + PI) / (2.0 * PI);
-        v.text_coord.y = (phi / PI);
+        v.text_coord.x = (theta + pi) / (2.0 * pi);
+        v.text_coord.y = (phi / pi);
     }
 
     v.color = color;
@@ -506,7 +489,7 @@ Vertex3d compute_vertex(Vector3d vertex, Grid grid, BallArray balls)
     return v;
 }
 
-Voxel compute_voxel(Index3d grid_pos, Grid grid)
+static Voxel compute_voxel(Index3d grid_pos, Grid grid)
 {
     assert(grid_pos.x < grid.count.x - 1);
     assert(grid_pos.y < grid.count.y - 1);
@@ -533,7 +516,7 @@ Voxel compute_voxel(Index3d grid_pos, Grid grid)
     return voxel;
 }
 
-Vector3d compute_edge_point(char edge, Vector3d orig, Voxel *voxel, Grid grid)
+static Vector3d compute_edge_point(char edge, Vector3d orig, Voxel *voxel, Grid grid)
 {
     Vector3d computedPoint;
     char index0 = marching_cube_edges[edge][0];
@@ -548,11 +531,9 @@ Vector3d compute_edge_point(char edge, Vector3d orig, Voxel *voxel, Grid grid)
     if (!grid.nodes.items[voxel->corners[index0].grid_index].cache[coord].dirty)
     {
         computedPoint = grid.nodes.items[voxel->corners[index0].grid_index].cache[coord].value;
-        cache_hit++;
     }
     else
     {
-        cache_miss++;
         float t = (grid.config.threshold - voxel->corners[index0].energy) / (voxel->corners[index1].energy - voxel->corners[index0].energy);
 
         float field_value[MB_COORD_COUNT];
@@ -574,7 +555,7 @@ Vector3d compute_edge_point(char edge, Vector3d orig, Voxel *voxel, Grid grid)
     return computedPoint;
 }
 
-void compute_voxel_triangles(Voxel *voxel, Grid *grid, BallArray balls)
+static void compute_voxel_triangles(Voxel *voxel, Grid *grid, BallArray balls)
 {
     // This table indicates what axis variations have the second index of marching_cube_edges
     size_t coords[12] = {MB_COORD_X, MB_COORD_Z, MB_COORD_X, MB_COORD_Z,
@@ -602,7 +583,7 @@ void compute_voxel_triangles(Voxel *voxel, Grid *grid, BallArray balls)
     }
 }
 
-void compute_energy_field(BallArray balls, Grid grid)
+static void compute_energy_field(BallArray balls, Grid grid)
 {
     size_t x, y, z;
 
@@ -621,7 +602,7 @@ void compute_energy_field(BallArray balls, Grid grid)
     }
 }
 
-void queue_voxel_push(Index3d pos, Grid *grid)
+static void queue_voxel_push(Index3d pos, Grid *grid)
 {
     assert(grid->queue.count < grid->queue.capacity);
     assert(pos.x <= grid->count.x - 1);
@@ -635,18 +616,18 @@ void queue_voxel_push(Index3d pos, Grid *grid)
     }
 }
 
-Index3d queue_voxel_pop(Grid *grid)
+static Index3d queue_voxel_pop(Grid *grid)
 {
     assert(grid->queue.count >= 0);
     return grid->queue.items[--grid->queue.count];
 }
 
-bool queue_voxel_empty(Grid *grid)
+static bool queue_voxel_empty(Grid *grid)
 {
     return (grid->queue.count == 0);
 }
 
-void queue_voxel_push_neighbors(Voxel voxel, Grid *grid)
+static void queue_voxel_push_neighbors(Voxel voxel, Grid *grid)
 {
     Index3d origin = voxel.corners[0].grid_pos;
 
@@ -684,7 +665,7 @@ void queue_voxel_push_neighbors(Voxel voxel, Grid *grid)
         }                                              \
     }
 
-bool search_field_limit(Index3d orig, Index3d *found, Grid grid)
+static bool search_field_limit(Index3d orig, Index3d *found, Grid grid)
 {
     if (orig.x >= grid.count.x - 1 ||
         orig.y >= grid.count.y - 1 ||
@@ -704,7 +685,9 @@ bool search_field_limit(Index3d orig, Index3d *found, Grid grid)
     return false;
 }
 
-void generate_mesh(Grid *grid, BallArray balls)
+// --
+
+void metaball_generate_mesh(Grid *grid, BallArray balls)
 {
     grid->mesh.triangleCount = 0;
     grid->mesh.vertexCount = 0;
@@ -732,7 +715,7 @@ void generate_mesh(Grid *grid, BallArray balls)
     }
 }
 
-Grid grid_create(Index3d count, Vector3d size, Vector3d pos)
+Grid metaball_grid_create(Index3d count, Vector3d size, Vector3d pos)
 {
     Grid grid;
 
@@ -756,7 +739,7 @@ Grid grid_create(Index3d count, Vector3d size, Vector3d pos)
     return grid;
 }
 
-void grid_destroy(Grid *grid)
+void metaball_grid_destroy(Grid *grid)
 {
     grid->count = (Index3d){.x = 0, .y = 0, .z = 0};
     grid->size = (Vector3d){.x = 0, .y = 0, .z = 0};

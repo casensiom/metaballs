@@ -27,7 +27,29 @@ Include the header file and the definition to include the implementation code in
 #include "metaballs.h"
 ``` 
 
-Refer [main.c](https://github.com/casensiom/metaballs/main.c) to see the library usage.
+Refer the [examples](https://github.com/casensiom/metaballs/examples/exmaple0.c) to see the library usage.
+
+### Create
+
+Creates the metaballs workspace
+```c
+Index3d count = {.x = 10, .y = 10, .z = 10};
+Vector3d size = {.x = 2, .y = 2, .z = 2};
+Vector3d pos = {.x = 0, .y = 0, .z = 0};
+Grid grid = metaball_grid_create(count, size, pos);
+```
+
+### Generate mesh
+Builds up the mesh to render the metaballs
+```c
+metaball_generate_mesh(&grid, balls);
+```
+
+### Destroy
+Destroys the metaballs workspace
+```c
+metaball_grid_destroy(&grid);
+```
 
 ## Features
 - **Iteration**: Added a method to visit only valid neighbors.

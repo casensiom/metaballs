@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
     Index3d count = {.x = 10, .y = 10, .z = 10};
     Vector3d size = {.x = 2, .y = 2, .z = 2};
     Vector3d pos = {.x = 0, .y = 0, .z = 0};
-    Grid grid = grid_create(count, size, pos);
+    Grid grid = metaball_grid_create(count, size, pos);
 
     BallArray balls = MB_CREATE_ARRAY(Ball, 3);
 
@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
             grid.config.threshold -= 0.05f;
         }
 
-        generate_mesh(&grid, balls);
+        metaball_generate_mesh(&grid, balls);
 
         BeginDrawing();
             ClearBackground(RAYWHITE);
@@ -95,9 +95,6 @@ int main(int argc, char *argv[])
             char label_fps[256];
             sprintf(label_fps, "FPS: %d", GetFPS());
             DrawText(label_fps, 10, 10, 20, BLACK);
-
-            // sprintf(label_fps, "CACHE HIT: %lu, MISS: %lu", cache_hit, cache_miss);
-            // DrawText(label_fps, 10, 50, 20, BLACK);
         EndDrawing();
     }
 
@@ -105,7 +102,7 @@ int main(int argc, char *argv[])
     // RL unload mesh
     raylib_unload_mesh(&rayMesh);
     MB_DESTROY_ARRAY(balls);
-    grid_destroy(&grid);
+    metaball_grid_destroy(&grid);
 
     CloseWindow();
 
